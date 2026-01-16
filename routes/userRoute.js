@@ -6,7 +6,7 @@ import {
   authMe,
   loginUser,
   registerUser,
-} from "../controller/userController.js";
+} from "../controller/userCon.js";
 import { forgotPassword, resetPassword } from "../controller/passwordController.js";
 
 router.route("/user/register").post(registerUser);
