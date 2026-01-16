@@ -3,7 +3,7 @@ import User from "../models/UserModle.js";
 import Stripe from "stripe";
 
 export const placeOrder = async (req, res) => {
-  const frontendURL = "http://localhost:5173";
+  const frontendURL = process.env.FRONTEND_URL;
   const stripe = new Stripe(process.env.STRIPE_SECRET);
 
   try {
@@ -20,8 +20,6 @@ export const placeOrder = async (req, res) => {
       amount,
       address,
     });
-    // await User.findByIdAndUpdate(userId, { cartData: {} });
-    // await newOrder.save(); // This line is removed as per instruction
 
     const line_items = items.map((item) => ({
       price_data: {
