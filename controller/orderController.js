@@ -21,6 +21,8 @@ export const placeOrder = async (req, res) => {
       address,
     });
 
+    await newOrder.save();
+
     const line_items = items.map((item) => ({
       price_data: {
         currency: "inr",
@@ -50,12 +52,9 @@ export const placeOrder = async (req, res) => {
       mode: "payment",
       locale: "auto",
       success_url: `${frontendURL}/verify?success=true&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${frontendURL}/verify?success=false`,
+      cancel_url: `${frontendURL}/verify?success=false&orderId=${newOrder._id}`,
       metadata: {
-        userId: String(userId),
-        address: JSON.stringify(address),
-        items: JSON.stringify(items),
-        amount: String(amount),
+        orderId: newOrder._id.toString(),
       },
     });
 
@@ -70,32 +69,33 @@ export const placeOrder = async (req, res) => {
 };
 
 export const verifyOrder = async (req, res) => {
-  const { success, sessionId } = req.body;
+  const { success, sessionId, orderId } = req.body;
   const stripe = new Stripe(process.env.STRIPE_SECRET);
 
   try {
     if (success === "true" && sessionId) {
       const session = await stripe.checkout.sessions.retrieve(sessionId);
+      const orderIdFromMetadata = session.metadata.orderId;
 
       if (session.payment_status === "paid") {
-        const { userId, address, items, amount } = session.metadata;
+        await Order.findByIdAndUpdate(orderIdFromMetadata, { payment: true });
 
-        const newOrder = new Order({
-          userId,
-          address: JSON.parse(address),
-          items: JSON.parse(items),
-          amount,
-          payment: true
-        });
-
-        await newOrder.save();
-        await User.findByIdAndUpdate(userId, { cartData: {} });
+        // Retrieve order to get userId for clearing cart
+        const order = await Order.findById(orderIdFromMetadata);
+        await User.findByIdAndUpdate(order.userId, { cartData: {} });
 
         res.status(200).json({ success: true, message: "Paid and Order Created" });
       } else {
+        await Order.findByIdAndDelete(orderIdFromMetadata);
         res.status(400).json({ success: false, message: "Payment not verified" });
       }
     } else {
+      // Handle cancellation if orderId is available (passed from frontend/URL)
+      // Note: Frontend might need update to pass orderId in the failed case if we want to delete it here.
+      // For now, if we have orderId from body (if frontend sends it), we delete.
+      if (orderId) {
+        await Order.findByIdAndDelete(orderId);
+      }
       res.status(200).json({ success: false, message: "Payment failed" });
     }
   } catch (err) {
