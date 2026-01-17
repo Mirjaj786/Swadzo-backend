@@ -52,10 +52,10 @@ export const placeOrder = async (req, res) => {
       success_url: `${frontendURL}/verify?success=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${frontendURL}/verify?success=false`,
       metadata: {
-        userId,
+        userId: String(userId),
         address: JSON.stringify(address),
         items: JSON.stringify(items),
-        amount,
+        amount: String(amount),
       },
     });
 
