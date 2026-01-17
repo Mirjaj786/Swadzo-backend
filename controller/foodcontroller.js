@@ -120,7 +120,7 @@ export const searchFood = async (req, res) => {
       });
     }
 
-    const searchRegex = new RegExp(input.trim(), "i"); // case-insensitive
+    const searchRegex = new RegExp(input.trim(), "i");
 
     const foods = await Food.find({
       $or: [
@@ -151,44 +151,3 @@ export const searchFood = async (req, res) => {
     });
   }
 };
-
-// export const editFood = async (req, res) => {
-//   try {
-//     const { id, name, price, description, category } = req.body;
-
-//     const food = await Food.findById(id);
-//     if (!food) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Food not found",
-//       });
-//     }
-
-//     // If new image uploaded → delete old image
-//     if (req.file) {
-//       fs.unlink(`uploads/${food.image}`, (err) => {
-//         if (err) console.log("Old image delete error:", err.message);
-//       });
-//       food.image = req.file.filename;
-//     }
-
-//     food.name = name || food.name;
-//     food.price = price || food.price;
-//     food.description = description || food.description;
-//     food.category = category || food.category;
-
-//     await food.save();
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Food updated successfully!",
-//       food,
-//     });
-//   } catch (err) {
-//     console.error("Edit food error:", err.message);
-//     return res.status(500).json({
-//       success: false,
-//       message: err.message,
-//     });
-//   }
-// };
