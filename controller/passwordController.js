@@ -11,13 +11,11 @@ const getTransporter = () => {
     if (!transporter) {
         transporter = nodemailer.createTransport({
             host: "smtp.gmail.com",
-            port: 587,
+            port: 587, // Try 587 again (STARTTLS)
             secure: false,
-            pool: true,
-            family: 4,
+            pool: true, // Disable pooling to allow fresh connections every time
+            family: 4, // Force IPv4
             connectionTimeout: 10000,
-            greetingTimeout: 5000,
-            socketTimeout: 10000,
             auth: {
                 user: process.env.EMAIL_USER,
                 pass: process.env.EMAIL_PASSWORD,
