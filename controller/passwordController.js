@@ -10,16 +10,21 @@ let transporter;
 const getTransporter = () => {
     if (!transporter) {
         transporter = nodemailer.createTransport({
-            host: "smtp.gmail.com",
-            port: 587, // Try 587 again (STARTTLS)
+            host: "smtp-relay.brevo.com",
+            port: 587,
             secure: false,
-            pool: true, // Disable pooling to allow fresh connections every time
-            family: 4, // Force IPv4
-            connectionTimeout: 10000,
             auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASSWORD,
+                user: process.env.BREVO_EMAIL,
+                pass: process.env.BREVO_SMTP_KEY,
             },
+        });
+
+        transporter.verify((error, success) => {
+            if (error) {
+                console.log(" Brevo SMTP Error:", error);
+            } else {
+                console.log(" Brevo SMTP Ready");
+            }
         });
     }
     return transporter;
@@ -40,7 +45,7 @@ export const forgotPassword = async (req, res) => {
         const resetLink = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
         const mailOptions = {
-            from: process.env.EMAIL_USER,
+            from: process.env.BREVO_SENDER,
             to: user.email,
             subject: "Reset Your Password - Swadzo",
             html: `
@@ -58,7 +63,7 @@ export const forgotPassword = async (req, res) => {
             `
         };
 
-        await emailTransporter.sendMail(mailOptions);
+        const info = await emailTransporter.sendMail(mailOptions);
 
         return res.status(200).json({ success: true, message: "Reset link sent to your email" });
 
