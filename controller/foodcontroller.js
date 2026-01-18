@@ -1,6 +1,6 @@
 import Food from "../models/foodModle.js";
 import fs from "fs";
-import mongoose from "mongoose";
+import { cloudinary } from "../config/cloudinary.js";
 
 // Add new food
 export const addNewFood = async (req, res) => {
@@ -15,13 +15,15 @@ export const addNewFood = async (req, res) => {
       return res.status(400).json({ message: "Please provide all details!" });
     }
 
+    const imageUrl = req.file.path.replace(/\s/g, "");
+
     const newFood = new Food({
       name,
       resturant,
       price: Number(price),
       description,
       category,
-      image: req.file.filename,
+      image: imageUrl,
     });
 
     await newFood.save();
@@ -87,12 +89,26 @@ export const removeFood = async (req, res) => {
       });
     }
 
-    // Delete image from uploads folder
-    fs.unlink(`uploads/${food.image}`, (err) => {
-      if (err) {
-        console.log("Image delete error:", err.message);
+    // Delete image from Cloudinary
+    if (food.image.startsWith("http")) {
+      try {
+        const parts = food.image.split("/");
+        const filenameWithExt = parts[parts.length - 1];
+        const folder = parts[parts.length - 2];
+
+        const publicId = `Food_Web/${filenameWithExt.split('.')[0]}`;
+
+        await cloudinary.uploader.destroy(publicId);
+      } catch (error) {
+        console.log("Cloudinary delete error:", error.message);
       }
-    });
+    } else {
+      fs.unlink(`uploads/${food.image}`, (err) => {
+        if (err) {
+          console.log("Image delete error:", err.message);
+        }
+      });
+    }
 
     await Food.findByIdAndDelete(id);
 
