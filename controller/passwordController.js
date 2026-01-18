@@ -4,6 +4,25 @@ import bcrypt from "bcrypt";
 import nodemailer from "nodemailer";
 
 
+
+let transporter;
+
+const getTransporter = () => {
+    if (!transporter) {
+        transporter = nodemailer.createTransport({
+            host: "smtp.gmail.com",
+            port: 587,
+            secure: false,
+            pool: true, // Enable connection pooling
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASSWORD,
+            },
+        });
+    }
+    return transporter;
+};
+
 export const forgotPassword = async (req, res) => {
     const { email } = req.body;
     try {
@@ -13,15 +32,8 @@ export const forgotPassword = async (req, res) => {
         }
 
         const resetToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "15m" });
-        const transporter = nodemailer.createTransport({
-            host: "smtp.gmail.com",
-            port: 587,
-            secure: false,
-            auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASSWORD,
-            },
-        });
+
+        const emailTransporter = getTransporter();
 
         const resetLink = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
@@ -44,7 +56,7 @@ export const forgotPassword = async (req, res) => {
             `
         };
 
-        await transporter.sendMail(mailOptions);
+        await emailTransporter.sendMail(mailOptions);
 
         return res.status(200).json({ success: true, message: "Reset link sent to your email" });
 
