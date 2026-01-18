@@ -4,7 +4,16 @@ import Stripe from "stripe";
 
 export const placeOrder = async (req, res) => {
   const frontendURL = process.env.FRONTEND_URL;
-  const stripe = new Stripe(process.env.STRIPE_SECRET);
+  const stripeSecret = process.env.STRIPE_SECRET;
+
+  if (!stripeSecret || !frontendURL) {
+    return res.status(500).json({
+      success: false,
+      message: "Missing STRIPE_SECRET or FRONTEND_URL in server environment",
+    });
+  }
+
+  const stripe = new Stripe(stripeSecret);
 
   try {
     const userId = req.userId;
@@ -13,15 +22,6 @@ export const placeOrder = async (req, res) => {
     if (!items || items.length === 0) {
       return res.status(400).json({ message: "Cart empty" });
     }
-
-    const newOrder = new Order({
-      userId,
-      items,
-      amount,
-      address,
-    });
-
-    await newOrder.save();
 
     const line_items = items.map((item) => ({
       price_data: {
@@ -46,15 +46,27 @@ export const placeOrder = async (req, res) => {
       quantity: 1,
     });
 
+    // Minify items for metadata to avoid 500 char limit
+    const metaItems = items.map((item) => ({
+      _id: item._id,
+      name: item.name,
+      price: item.price,
+      quantity: item.quantity,
+      // Exclude description, image, etc.
+    }));
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items,
       mode: "payment",
       locale: "auto",
       success_url: `${frontendURL}/verify?success=true&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${frontendURL}/verify?success=false&orderId=${newOrder._id}`,
+      cancel_url: `${frontendURL}/verify?success=false`,
       metadata: {
-        orderId: newOrder._id.toString(),
+        userId: userId,
+        address: JSON.stringify(address).substring(0, 499), // Truncate if necessary (risky but better than crash)
+        items: JSON.stringify(metaItems).substring(0, 499), // Truncate if necessary
+        amount: amount,
       },
     });
 
@@ -69,38 +81,69 @@ export const placeOrder = async (req, res) => {
 };
 
 export const verifyOrder = async (req, res) => {
-  const { success, sessionId, orderId } = req.body;
+  const { success, sessionId } = req.body;
   const stripe = new Stripe(process.env.STRIPE_SECRET);
 
   try {
     if (success === "true" && sessionId) {
       const session = await stripe.checkout.sessions.retrieve(sessionId);
-      const orderIdFromMetadata = session.metadata.orderId;
 
       if (session.payment_status === "paid") {
-        await Order.findByIdAndUpdate(orderIdFromMetadata, { payment: true });
+        if (
+          !session.metadata ||
+          !session.metadata.items ||
+          !session.metadata.address
+        ) {
+          console.log("Metadata missing in session:", sessionId);
+          return res.status(400).json({
+            success: false,
+            message: "Order details missing. Please contact support.",
+          });
+        }
 
-        // Retrieve order to get userId for clearing cart
-        const order = await Order.findById(orderIdFromMetadata);
-        await User.findByIdAndUpdate(order.userId, { cartData: {} });
+        const userId = session.metadata.userId;
+        let address, items;
 
-        res.status(200).json({ success: true, message: "Paid and Order Created" });
+        try {
+          address = JSON.parse(session.metadata.address);
+          items = JSON.parse(session.metadata.items);
+        } catch (parseError) {
+          console.log("JSON Parse Error:", parseError.message);
+          return res.status(500).json({
+            success: false,
+            message: "Corrupt order data.",
+          });
+        }
+
+        const amount = session.metadata.amount;
+
+        const newOrder = new Order({
+          userId,
+          items,
+          amount,
+          address,
+          payment: true,
+        });
+
+        await newOrder.save();
+        await User.findByIdAndUpdate(userId, { cartData: {} });
+
+        res
+          .status(200)
+          .json({ success: true, message: "Paid and Order Created" });
       } else {
-        await Order.findByIdAndDelete(orderIdFromMetadata);
-        res.status(400).json({ success: false, message: "Payment not verified" });
+        res
+          .status(400)
+          .json({ success: false, message: "Payment not verified" });
       }
     } else {
-      // Handle cancellation if orderId is available (passed from frontend/URL)
-      // Note: Frontend might need update to pass orderId in the failed case if we want to delete it here.
-      // For now, if we have orderId from body (if frontend sends it), we delete.
-      if (orderId) {
-        await Order.findByIdAndDelete(orderId);
-      }
       res.status(200).json({ success: false, message: "Payment failed" });
     }
   } catch (err) {
     console.log("Verify Order Error:", err.message);
-    res.status(500).json({ success: false, message: "Order verification failed" });
+    res
+      .status(500)
+      .json({ success: false, message: "Order verification failed" });
   }
 };
 
