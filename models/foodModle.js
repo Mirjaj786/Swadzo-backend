@@ -10,7 +10,6 @@ const foodSchema = new mongoose.Schema(
     resturant: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
     },
 
